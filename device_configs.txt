@@ -1,0 +1,390 @@
+Device: Router1 (Main_Router)
+
+hostname R1
+interface g0/0
+no shut
+
+Router on a stick for Inter-vlan routing + DHCP Relay + HSRP + NAT + NTP + SSH and AAA using TACACS server + syslog
+===================================================================================================================
+
+interface g0/0.10
+encapsulation dot1q 10
+ip add 192.168.0.1 255.255.255.240
+
+ip access-group HR-FILTER in
+
+ip helper-address 192.168.0.50
+
+ip nat inside
+
+standby 10 ip 192.168.0.2
+standby 10 priority 110
+standby 10 preempt
+
+interface g0/0.20
+encapsulation dot1q 20
+ip add 192.168.0.17 255.255.255.240
+
+ip access-group IT-FILTER in
+
+ip helper-address 192.168.0.50
+
+ip nat inside
+
+standby 20 ip 192.168.0.18
+standby 20 priority 110
+standby 20 preempt
+
+interface g0/0.30
+encapsulation dot1q 30
+ip add 192.168.0.33 255.255.255.240
+
+ip access-group FINANCE-FILTER in
+
+ip helper-address 192.168.0.50
+
+ip nat inside
+
+standby 30 ip 192.168.0.34
+standby 30 priority 110
+standby 30 preempt
+
+interface g0/0.50
+encapsulation dot1q 50
+ip add 192.168.0.49 255.255.255.240
+
+ip nat inside
+
+standby 50 ip 192.168.0.51
+standby 50 priority 110
+standby 50 preempt
+
+interface g0/2
+ip add 200.200.200.1 255.255.255.0
+ip nat outside
+
+access-list 1 permit 192.168.0.0 0.0.0.255
+
+ip nat inside source list 1 interface GigabitEthernet0/2 overload
+
+access-list 1 permit 192.168.0.0 0.0.0.255
+ip access-list extended IT-FILTER
+ deny ip 192.168.0.16 0.0.0.15 192.168.0.0 0.0.0.31 #block HR and Finance from IT
+ permit ip 192.168.0.16 0.0.0.15 192.168.0.48 0.0.0.15 #Allow IT to access internal server
+ permit ip 192.168.0.16 0.0.0.15 any #Allow IT to access internet 
+ permit ip any any
+ip access-list extended FINANCE-FILTER
+ deny ip 192.168.0.32 0.0.0.15 192.168.0.0 0.0.0.31     #block HR and IT from Finance
+ permit ip 192.168.0.32 0.0.0.15 192.168.0.48 0.0.0.15  #Allow Finance to access internal server
+ permit ip 192.168.0.32 0.0.0.15 any                    #Allow finance to access internet
+ permit ip any any
+ip access-list extended HR-FILTER
+ deny ip 192.168.0.0 0.0.0.15 192.168.0.32 0.0.0.15     #block finance from HR
+ deny ip 192.168.0.0 0.0.0.15 192.168.0.16 0.0.0.15     #block IT from HR
+ permit ip 192.168.0.0 0.0.0.15 192.168.0.48 0.0.0.15   #Allow HR to access internal server
+ permit ip 192.168.0.0 0.0.0.15 any                     #Allow HR to access internet
+ permit ip any any
+
+service timestamps log datetime msec
+ntp server 192.168.0.50
+logging 192.168.0.50
+
+aaa new-model
+!
+aaa authentication login SSH-AUTHEN group tacacs+ local 
+aaa authentication login TACACS_LINE group tacacs+ local 
+username admin privilege 15 secret cisco321
+tacacs-server host 192.168.0.50 key cisco321
+ip ssh version 2
+ip domain-name company.local
+line con 0
+ login authentication TACACS_LINE
+line vty 0 4
+ login authentication SSH-AUTHEN
+ transport input ssh
+
+
+Device: Router2 (Backup_router)  #same config as R1 but different physical gateway for each subinterfaces
+
+hostname R2
+interface g0/0
+no shut
+interface g0/0.10
+encapsulation dot1q 10
+ip add 192.168.0.14 255.255.255.240
+
+ip access-group HR-FILTER in
+
+ip helper-address 192.168.0.50
+
+ip nat inside
+
+standby 10 ip 192.168.0.2
+standby 10 priority 110
+standby 10 preempt
+
+interface g0/0.20
+encapsulation dot1q 20
+ip add 192.168.0.30 255.255.255.240
+
+ip access-group IT-FILTER in
+
+ip helper-address 192.168.0.50
+
+ip nat inside
+
+standby 20 ip 192.168.0.18
+standby 20 priority 110
+standby 20 preempt
+
+interface g0/0.30
+encapsulation dot1q 30
+ip add 192.168.0.46 255.255.255.240
+
+ip access-group FINANCE-FILTER in
+
+ip helper-address 192.168.0.50
+
+ip nat inside
+
+standby 30 ip 192.168.0.34
+standby 30 priority 110
+standby 30 preempt
+
+interface g0/0.50
+encapsulation dot1q 50
+ip add 192.168.0.62 255.255.255.240
+
+ip nat inside
+
+standby 50 ip 192.168.0.51
+standby 50 priority 110
+standby 50 preempt
+
+interface g0/2
+ip add 200.200.200.2 255.255.255.0
+ip nat outside
+
+access-list 1 permit 192.168.0.0 0.0.0.255
+
+ip nat inside source list 1 interface GigabitEthernet0/2 overload
+
+access-list 1 permit 192.168.0.0 0.0.0.255
+ip access-list extended IT-FILTER
+ deny ip 192.168.0.16 0.0.0.15 192.168.0.0 0.0.0.31
+ permit ip 192.168.0.16 0.0.0.15 192.168.0.48 0.0.0.15
+ permit ip 192.168.0.16 0.0.0.15 any
+ permit ip any any
+ip access-list extended FINANCE-FILTER
+ deny ip 192.168.0.32 0.0.0.15 192.168.0.0 0.0.0.31
+ permit ip 192.168.0.32 0.0.0.15 192.168.0.48 0.0.0.15
+ permit ip 192.168.0.32 0.0.0.15 any
+ permit ip any any
+ip access-list extended HR-FILTER
+ deny ip 192.168.0.0 0.0.0.15 192.168.0.32 0.0.0.15
+ deny ip 192.168.0.0 0.0.0.15 192.168.0.16 0.0.0.15
+ permit ip 192.168.0.0 0.0.0.15 192.168.0.48 0.0.0.15
+ permit ip 192.168.0.0 0.0.0.15 any
+ permit ip any any
+
+service timestamps log datetime msec
+ntp server 192.168.0.50
+logging 192.168.0.50
+
+aaa new-model
+!
+aaa authentication login SSH-AUTHEN group tacacs+ local 
+aaa authentication login TACACS_LINE group tacacs+ local 
+username admin privilege 15 secret cisco321
+tacacs-server host 192.168.0.50 key cisco321
+ip ssh version 2
+ip domain-name company.local
+line con 0
+ login authentication TACACS_LINE
+line vty 0 4
+ login authentication SSH-AUTHEN
+ transport input ssh
+
+
+Device: Switch1 
+
+VLAN,Trunking, Access Port, STP, port-security, portfast, BPDU guard, syslog, NTP
+=================================================================================
+
+hostname SW1
+
+spanning-tree mode pvst                 # enables Per-VLAN Spanning Tree (PVST) mode on a switch, allowing separate Spanning Tree instances for each VLAN.
+
+vlan 10
+name HR
+vlan 20
+name IT
+vlan 30
+name FINANCE
+vlan 50
+name SERVER
+
+interface FastEthernet0/1
+ switchport mode access
+ switchport access vlan 10
+ 
+ switchport port-security                     #Port security restricts network access by allowing only specific devices, identified by their MAC addresses, to connect to a switch port
+ switchport port-security maximum 1
+ switchport port-security violation shutdown  #if someone connected in your network by removing end device, it automatically shutdown the switchport.
+ switchport port-security mac-address sticky 
+
+ spanning-tree portfast                 #PortFast allows a switch port to immediately enter the forwarding state, bypassing the usual Spanning Tree Protocol delays for end devices
+ spanning-tree bpduguard enable     #BPDU Guard automatically disables a PortFast-enabled switch port if it receives a BPDU, protecting the network from potential loops caused by misconfig              
+
+interface FastEthernet0/2
+ switchport mode access
+ switchport access vlan 10
+ 
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ switchport port-security mac-address sticky 
+
+ spanning-tree portfast       
+ spanning-tree bpduguard enable
+
+interface FastEthernet0/3
+ switchport mode access
+ switchport access vlan 10
+ 
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ switchport port-security mac-address sticky 
+
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+
+interface FastEthernet0/6
+ switchport mode access
+ switchport access vlan 20
+ 
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ switchport port-security mac-address sticky 
+
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+
+interface FastEthernet0/7
+ switchport mode access
+ switchport access vlan 20
+ 
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ switchport port-security mac-address sticky 
+
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+
+interface FastEthernet0/8
+ switchport mode access
+ switchport access vlan 20
+ 
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ switchport port-security mac-address sticky 
+
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+
+interface GigabitEthernet0/1
+ switchport trunk allowed vlan 10,20,30,50
+ ip dhcp snooping trust                     #prevent rogue DHCP servers
+ switchport mode trunk
+!
+interface GigabitEthernet0/2
+ switchport trunk allowed vlan 10,20,30,50
+ ip dhcp snooping trust
+ switchport mode trunk
+
+logging 192.168.0.50
+ntp server 192.168.0.50
+
+Device: Switch2 
+
+hostname SW2
+
+spanning-tree mode pvst
+
+vlan 10
+name HR
+vlan 20
+name IT
+vlan 30
+name FINANCE
+vlan 50
+name SERVER
+
+interface FastEthernet0/1
+ switchport mode access
+ switchport access vlan 30
+ 
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ switchport port-security mac-address sticky 
+
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+
+interface FastEthernet0/2
+ switchport mode access
+ switchport access vlan 30
+ 
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ switchport port-security mac-address sticky 
+
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+
+interface FastEthernet0/3
+ switchport mode access
+ switchport access vlan 30
+ 
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ switchport port-security mac-address sticky 
+
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+
+interface FastEthernet0/24
+ switchport mode access
+ switchport access vlan 50
+ ip dhcp snooping trust
+ 
+ 
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ switchport port-security mac-address sticky 
+
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+
+interface GigabitEthernet0/1
+ switchport trunk allowed vlan 10,20,30,50
+ ip dhcp snooping trust
+ switchport mode trunk
+
+interface GigabitEthernet0/2
+ switchport trunk allowed vlan 10,20,30,50
+ ip dhcp snooping trust
+ switchport mode trunk
+
+logging 192.168.0.50
+ntp server 192.168.0.50
+
+
